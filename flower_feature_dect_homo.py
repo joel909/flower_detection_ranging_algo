@@ -1,7 +1,8 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
-from HiwonderSDK import Board as Board 
+import math
+#from HiwonderSDK import Board as Board 
 
 #################################IMP#########################
 # Define paths for main and template images CHANGE IT WHILE RUNNING ON THE PI
@@ -9,6 +10,13 @@ main_image_path = 'C:/Users/joelj/Downloads/Flower_detection_algorithm/content/m
 template_image_path = 'C:/Users/joelj/Downloads/Flower_detection_algorithm/content/template.jpeg'
 ##########################
 
+
+matching_config = {
+    "main_image_path": 'half_cover.jpeg',  # Use the uploaded image as the main image
+    "template_image_path": 'template2.jpeg',  # Replace with the actual template path
+    "change_in_blue_thresthold": 3,
+    "sunflower_template": 'flower_template.jpeg'
+}
 
 arm_init_config = {
   "st1": 2.8,
@@ -32,10 +40,57 @@ class ArmMotor():
   def motion(motor1, motor2, motor3):
     #time.sleep(0.1)
     #working code to move the servos of the arm 
-    Board.setPWMServoPulse(1,1500,1000)
-    Board.setPWMServoPulse(2,1000,1000)
+    Board.setPWMServoPulse(1,motor1,1000)
+    Board.setPWMServoPulse(2,motor2,1000)
+    Board.setPWMServoPulse(3,motor3,1000)
+    #Board.setPWMServoPulse(4,1000,1000)
     return None
   def depth(): return None
+
+class Sensors():
+   def get_camera_frame(): return None
+   def get_depth(): return None
+
+
+
+class ArmTrajectory():
+  def trajectory_small_step(target_height, config): 
+    current_height = arm_init_config["st1"] + arm_init_config["st4"] +  arm_init_config["st2"]*math.cos(config["st-tta"]) + arm_init_config["st3"]*math.cos(config["st-phi"])
+    delta_height = target_height - current_height
+    scaling = delta_height * arm_init_config["delta-height-scaling"]
+    if delta_height > arm_init_config["alignment_depth_threshold"]:
+      if scaling>0.1:
+        step_size = scaling
+      else:
+        step_size = 0.1
+      new_config = config
+      desired_height = target_height - arm_init_config["st1"] - arm_init_config["st4"]
+      desired_height_for_current_iteration = desired_height * scaling
+      while True:
+        new_config["st-tta"]+=step_size
+        new_config["st-phi"]+=step_size
+        new_config["st-lmb"]-=2*step_size
+        if arm_init_config["st2"]*math.cos(new_config["st-tta"]) + arm_init_config["st3"]*math.cos(new_config["st-phi"]) - desired_height_for_current_iteration > 0:
+          break
+
+    elif delta_height < 0:
+      print("ERROR NO SENSE")
+    
+    else:
+      return [True]
+    def main(first_ratio):
+        current_config = arm_init_config
+        while True:
+            current_height = arm_init_config["st1"] + arm_init_config["st4"] +  arm_init_config["st2"]*math.cos(current_config["st-tta"]) + arm_init_config["st3"]*math.cos(current_config["st-phi"])
+            target_config = ArmTrajectory.trajectory_small_step(Sensors.get_depth() + current_height,  current_config)
+            ArmMotor.motion(target_config["st-tta"], target_config["st-lmb"], target_config["st-phi"])
+            current_config = target_config    
+            if current_config == [True]:
+                print("we're touching sunflower according to depth")
+                break
+
+    return new_config
+  
 
 def change_in_blue(ratio_first_picture, ratio_current):
     if ( ratio_current["blue"] / ratio_first_picture["blue"] ) > matching_config["change_in_blue_thresthold"]:
