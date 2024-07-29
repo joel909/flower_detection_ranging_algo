@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from HiwonderSDK import Board as Board 
 
 #################################IMP#########################
 # Define paths for main and template images CHANGE IT WHILE RUNNING ON THE PI
@@ -9,67 +10,47 @@ template_image_path = 'C:/Users/joelj/Downloads/Flower_detection_algorithm/conte
 ##########################
 
 
-#load main and template images
-main_image = cv2.imread(main_image_path)
-template = cv2.imread(template_image_path)
-template_image = cv2.imread(template_image_path)
-#check if images loaded successfully
-if main_image is None:
-    raise ValueError(f"Could not load the main image from path: {main_image_path}")
-if template is None:
-    raise ValueError(f"Could not load the template image from path: {template_image_path}")
+arm_init_config = {
+  "st1": 2.8,
+  "st2": 5.9,
+  "st3": 6.7,
+  "st4": 3.75,
+  "st-tta": 70,
+  "st-lmb": -135,
+  "st-phi": 65,
+  "delta-height-scaling": 0.1,
+  "minimum-step-size": 0.1,
+  "alignment_depth_threshold": .5
+}
+
+#final function to be put in the code 
 
 
-scale_percent = 50
-width = int(main_image.shape[1] * scale_percent / 100)
-height = int(main_image.shape[0] * scale_percent / 100)
-dim = (width, height)
-
-resized_main_image = cv2.resize(main_image, dim, interpolation=cv2.INTER_AREA)
-resized_template_image = cv2.resize(template_image, (int(template_image.shape[1] * scale_percent / 100), int(template_image.shape[0] * scale_percent / 100)), interpolation=cv2.INTER_AREA)
-
-#convert images to grayscale 
-main_image_gray = cv2.cvtColor(main_image, cv2.COLOR_BGR2GRAY)
-template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
-main_gray = cv2.cvtColor(resized_main_image, cv2.COLOR_BGR2GRAY)
-template_gray_1 = cv2.cvtColor(resized_template_image, cv2.COLOR_BGR2GRAY)
-
-method = cv2.TM_CCOEFF_NORMED
-result = cv2.matchTemplate(main_gray, template_gray_1, method)
-min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
-
-top_left = max_loc
-bottom_right = (top_left[0] + resized_template_image.shape[1], top_left[1] + resized_template_image.shape[0])
-cv2.rectangle(resized_main_image, top_left, bottom_right, (0, 255, 0), 2)
-
-print(f"Top left corner: {top_left}")
-print(f"Bottom right corner: {bottom_right}")
-
-plt.imshow(resized_main_image)
-plt.show()
-
-isolated_pixels = resized_main_image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
-plt.imshow(isolated_pixels)
-plt.show()
 
 
-isolated_pixels = resized_main_image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+class ArmMotor():
+  def motion(motor1, motor2, motor3):
+    #time.sleep(0.1)
+    #working code to move the servos of the arm 
+    Board.setPWMServoPulse(1,1500,1000)
+    Board.setPWMServoPulse(2,1000,1000)
+    return None
+  def depth(): return None
 
-print(f"Isolated pixels shape: {isolated_pixels.shape}")
+def change_in_blue(ratio_first_picture, ratio_current):
+    if ( ratio_current["blue"] / ratio_first_picture["blue"] ) > matching_config["change_in_blue_thresthold"]:
+        return True
+    else: return False
 
-if isolated_pixels.size == 0:
-    raise ValueError("Isolated pixels region is empty. Check the bounding box coordinates.")
 
-
-# round pixel values to the closest primary color
 def round_to_rgb(pixel):
     r, g, b = pixel
     if r > g and r > b:
-        return [255, 0, 0]  # R
+        return [255, 0, 0]  # Red
     elif g > r and g > b:
-        return [0, 255, 0]  # G
+        return [0, 255, 0]  # Green
     elif b > r and b > g:
-        return [0, 0, 255]  #B
+        return [0, 0, 255]  # Blue
     else:
         if g >= r and g >= b:
             return [0, 255, 0]
@@ -77,39 +58,160 @@ def round_to_rgb(pixel):
             return [255, 0, 0]
         else:
             return [0, 0, 255]
+        
 
-rounded_pixels = np.apply_along_axis(round_to_rgb, 2, isolated_pixels).astype(np.uint8)
+def get_box(main_image, template_image_path):
+    #main_image = cv2.imread(main_image_path)
+    template_image = cv2.imread(template_image_path)
 
-#  the percentage of r,b,g content
-total_pixels = rounded_pixels.shape[0] * rounded_pixels.shape[1]
-blue_pixels = np.sum(np.all(rounded_pixels == [0, 0, 255], axis=2))
-red_pixels = np.sum(np.all(rounded_pixels == [255, 0, 0], axis=2))
-green_pixels = np.sum(np.all(rounded_pixels == [0, 255, 0], axis=2))
+    #Temp Matching 
+    method = cv2.TM_CCOEFF_NORMED
+    result = cv2.matchTemplate(main_image, template_image, method)
+    print("LOLZ", result)
+    min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+    print("LMAOZ", min_val, max_val, max_loc)
 
-blue_percentage = (blue_pixels / total_pixels) * 100 if total_pixels != 0 else 0
-red_percentage = (red_pixels / total_pixels) * 100 if total_pixels != 0 else 0
-green_percentage = (green_pixels / total_pixels) * 100 if total_pixels != 0 else 0
-
-print(f"Total Pixels: {total_pixels:.2f}")
-print(f"Blue Pixels: {blue_pixels:.2f}")
-print(f"Red Pixels: {red_pixels:.2f}")
-print(f"Green Pixels: {green_pixels:.2f}")
-
-print(f"Percentage of blue content: {blue_percentage:.2f}%")
-print(f"Percentage of red content: {red_percentage:.2f}%")
-print(f"Percentage of green content: {green_percentage:.2f}%")
+    # bounding box 
+    top_left = max_loc
+    bottom_right = (top_left[0] + template_image.shape[1], top_left[1] + template_image.shape[0])
 
 
-plt.subplot(1, 2, 1)
-plt.imshow(cv2.cvtColor(resized_main_image, cv2.COLOR_BGR2RGB))
-plt.gca().add_patch(plt.Rectangle(top_left, bottom_right[0]-top_left[0], bottom_right[1]-top_left[1], edgecolor='red', facecolor='none', linewidth=2))
-plt.title("Template Matching Result")
+    isolated_pixels = main_image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+    
+    return main_image, isolated_pixels, top_left, bottom_right[0] - top_left[0],  bottom_right[1] - top_left[1]
 
-plt.subplot(1, 2, 2)
-plt.imshow(cv2.cvtColor(rounded_pixels, cv2.COLOR_BGR2RGB))
-plt.title("Isolated and Rounded Pixels")
+def give_pixel_percentage(main_image):
 
-plt.show()
+  
+    rounded_pixels = np.apply_along_axis(round_to_rgb, 2, main_image).astype(np.uint8)
+
+    
+    total_pixels = rounded_pixels.shape[0] * rounded_pixels.shape[1]
+    blue_pixels = np.sum(np.all(rounded_pixels == [255, 0, 0], axis=2))
+    red_pixels = np.sum(np.all(rounded_pixels == [0, 0, 255], axis=2))
+    green_pixels = np.sum(np.all(rounded_pixels == [0, 255, 0], axis=2))
+
+    blue_percentage = (blue_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+    red_percentage = (red_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+    green_percentage = (green_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+
+    print(f"Total Pixels: {total_pixels:.2f}")
+    print(f"Blue Pixels: {blue_pixels:.2f}")
+    print(f"Red Pixels: {red_pixels:.2f}")
+    print(f"Green Pixels: {green_pixels:.2f}")
+
+    print(f"Percentage of blue content: {blue_percentage:.2f}%")
+    print(f"Percentage of red content: {red_percentage:.2f}%")
+    print(f"Percentage of green content: {green_percentage:.2f}%")
+
+    return total_pixels, blue_percentage, red_percentage, green_percentage
+
+
+
+# #load main and template images
+# main_image = cv2.imread(main_image_path)
+# template = cv2.imread(template_image_path)
+# template_image = cv2.imread(template_image_path)
+# #check if images loaded successfully
+# if main_image is None:
+#     raise ValueError(f"Could not load the main image from path: {main_image_path}")
+# if template is None:
+#     raise ValueError(f"Could not load the template image from path: {template_image_path}")
+
+
+# scale_percent = 50
+# width = int(main_image.shape[1] * scale_percent / 100)
+# height = int(main_image.shape[0] * scale_percent / 100)
+# dim = (width, height)
+
+# resized_main_image = cv2.resize(main_image, dim, interpolation=cv2.INTER_AREA)
+# resized_template_image = cv2.resize(template_image, (int(template_image.shape[1] * scale_percent / 100), int(template_image.shape[0] * scale_percent / 100)), interpolation=cv2.INTER_AREA)
+
+# #convert images to grayscale 
+# main_image_gray = cv2.cvtColor(main_image, cv2.COLOR_BGR2GRAY)
+# template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+# main_gray = cv2.cvtColor(resized_main_image, cv2.COLOR_BGR2GRAY)
+# template_gray_1 = cv2.cvtColor(resized_template_image, cv2.COLOR_BGR2GRAY)
+
+# method = cv2.TM_CCOEFF_NORMED
+# result = cv2.matchTemplate(main_gray, template_gray_1, method)
+# min_val, max_val, min_loc, max_loc = cv2.minMaxLoc(result)
+
+# top_left = max_loc
+# bottom_right = (top_left[0] + resized_template_image.shape[1], top_left[1] + resized_template_image.shape[0])
+# cv2.rectangle(resized_main_image, top_left, bottom_right, (0, 255, 0), 2)
+
+# print(f"Top left corner: {top_left}")
+# print(f"Bottom right corner: {bottom_right}")
+
+# plt.imshow(resized_main_image)
+# plt.show()
+
+# isolated_pixels = resized_main_image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+# plt.imshow(isolated_pixels)
+# plt.show()
+
+
+# isolated_pixels = resized_main_image[top_left[1]:bottom_right[1], top_left[0]:bottom_right[0]]
+
+# print(f"Isolated pixels shape: {isolated_pixels.shape}")
+
+# if isolated_pixels.size == 0:
+#     raise ValueError("Isolated pixels region is empty. Check the bounding box coordinates.")
+
+
+# # round pixel values to the closest primary color
+# def round_to_rgb(pixel):
+#     r, g, b = pixel
+#     if r > g and r > b:
+#         return [255, 0, 0]  # R
+#     elif g > r and g > b:
+#         return [0, 255, 0]  # G
+#     elif b > r and b > g:
+#         return [0, 0, 255]  #B
+#     else:
+#         if g >= r and g >= b:
+#             return [0, 255, 0]
+#         elif r >= g and r >= b:
+#             return [255, 0, 0]
+#         else:
+#             return [0, 0, 255]
+
+# rounded_pixels = np.apply_along_axis(round_to_rgb, 2, isolated_pixels).astype(np.uint8)
+
+# #  the percentage of r,b,g content
+# total_pixels = rounded_pixels.shape[0] * rounded_pixels.shape[1]
+# blue_pixels = np.sum(np.all(rounded_pixels == [0, 0, 255], axis=2))
+# red_pixels = np.sum(np.all(rounded_pixels == [255, 0, 0], axis=2))
+# green_pixels = np.sum(np.all(rounded_pixels == [0, 255, 0], axis=2))
+
+# blue_percentage = (blue_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+# red_percentage = (red_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+# green_percentage = (green_pixels / total_pixels) * 100 if total_pixels != 0 else 0
+
+# print(f"Total Pixels: {total_pixels:.2f}")
+# print(f"Blue Pixels: {blue_pixels:.2f}")
+# print(f"Red Pixels: {red_pixels:.2f}")
+# print(f"Green Pixels: {green_pixels:.2f}")
+
+# print(f"Percentage of blue content: {blue_percentage:.2f}%")
+# print(f"Percentage of red content: {red_percentage:.2f}%")
+# print(f"Percentage of green content: {green_percentage:.2f}%")
+
+# plt.subplot(1, 2, 1)
+# plt.imshow(cv2.cvtColor(resized_main_image, cv2.COLOR_BGR2RGB))
+# plt.gca().add_patch(plt.Rectangle(top_left, bottom_right[0]-top_left[0], bottom_right[1]-top_left[1], edgecolor='red', facecolor='none', linewidth=2))
+# plt.title("Template Matching Result")
+
+# plt.subplot(1, 2, 2)
+# plt.imshow(cv2.cvtColor(rounded_pixels, cv2.COLOR_BGR2RGB))
+# plt.title("Isolated and Rounded Pixels")
+
+# plt.show()
+
+
+
+
 
 
 
