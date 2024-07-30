@@ -2,6 +2,8 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 import math
+import RPi.GPIO as GPIO
+import time
 #from HiwonderSDK import Board as Board 
 
 #################################IMP#########################
@@ -33,6 +35,32 @@ arm_init_config = {
 
 #final function to be put in the code 
 
+def turn_on_mortor():
+        #this one it to just test it dont merge it with the main code 
+
+        # GPIO pin number
+        A1 = 24
+        A2 = 23
+        EN = 22
+
+        # Setup GPIO
+        GPIO.setmode(GPIO.BCM)
+        GPIO.setup(A1, GPIO.OUT)
+        GPIO.setup(A2, GPIO.OUT)
+        GPIO.setup(EN, GPIO.OUT)
+
+        try:
+            while True:
+                # Turn LED on
+                GPIO.output(A1, GPIO.HIGH)
+                GPIO.output(A2, GPIO.LOW)
+                GPIO.output(EN, GPIO.HIGH)
+                time.sleep(1)  # Wait for 1 second
+
+        except KeyboardInterrupt:
+            # Clean up GPIO on keyboard interrupt
+            GPIO.cleanup()
+
 
 
 
@@ -54,30 +82,6 @@ class Sensors():
 
 
 class ArmTrajectory():
-  def trajectory_small_step(target_height, config): 
-    current_height = arm_init_config["st1"] + arm_init_config["st4"] +  arm_init_config["st2"]*math.cos(config["st-tta"]) + arm_init_config["st3"]*math.cos(config["st-phi"])
-    delta_height = target_height - current_height
-    scaling = delta_height * arm_init_config["delta-height-scaling"]
-    if delta_height > arm_init_config["alignment_depth_threshold"]:
-      if scaling>0.1:
-        step_size = scaling
-      else:
-        step_size = 0.1
-      new_config = config
-      desired_height = target_height - arm_init_config["st1"] - arm_init_config["st4"]
-      desired_height_for_current_iteration = desired_height * scaling
-      while True:
-        new_config["st-tta"]+=step_size
-        new_config["st-phi"]+=step_size
-        new_config["st-lmb"]-=2*step_size
-        if arm_init_config["st2"]*math.cos(new_config["st-tta"]) + arm_init_config["st3"]*math.cos(new_config["st-phi"]) - desired_height_for_current_iteration > 0:
-          break
-
-    elif delta_height < 0:
-      print("ERROR NO SENSE")
-    
-    else:
-      return [True]
     def main(first_ratio):
         current_config = arm_init_config
         while True:
@@ -88,8 +92,55 @@ class ArmTrajectory():
             if current_config == [True]:
                 print("we're touching sunflower according to depth")
                 break
+            
 
-    return new_config
+        camera_frame = Sensors.get_camera_frame()
+
+
+        # #main_image, isolated_pixels, anther_lower_left, anther_width, anther_height = get_box(camera_frame, config["sunflower_template"])
+        # total_pixels, blue_percentage, red_percentage, green_percentage = give_pixel_percentage(isolated_pixels)
+        # current_ratio = {"blue": blue_percentage, "non-blue": red_percentage+green_percentage}
+        # chck = change_in_blue(first_ratio, current_ratio)
+        # if chck:
+        #     ArmTrajectory.retract_arm(restart=False)
+        # else:
+        #     ArmTrajectory.retract_arm(restart=True)
+
+        return True
+    def retract_arm(restart=False):
+        target_config = arm_init_config
+        ArmMotor.motion(target_config["st-tta"], target_config["st-lmb"], target_config["st-phi"])
+        if restart: ArmTrajectory.main()
+
+    def trajectory_small_step(target_height, config): 
+        current_height = arm_init_config["st1"] + arm_init_config["st4"] +  arm_init_config["st2"]*math.cos(config["st-tta"]) + arm_init_config["st3"]*math.cos(config["st-phi"])
+        delta_height = target_height - current_height
+        scaling = delta_height * arm_init_config["delta-height-scaling"]
+        if delta_height > arm_init_config["alignment_depth_threshold"]:
+        if scaling>0.1:
+            step_size = scaling
+        else:
+            step_size = 0.1
+        new_config = config
+        desired_height = target_height - arm_init_config["st1"] - arm_init_config["st4"]
+        desired_height_for_current_iteration = desired_height * scaling
+        while True:
+            new_config["st-tta"]+=step_size
+            new_config["st-phi"]+=step_size
+            new_config["st-lmb"]-=2*step_size
+            if arm_init_config["st2"]*math.cos(new_config["st-tta"]) + arm_init_config["st3"]*math.cos(new_config["st-phi"]) - desired_height_for_current_iteration > 0:
+                break
+            elif delta_height < 0:
+                print("ERROR NO SENSE")
+            
+            else:
+                return [True]
+        return new_config
+    
+   
+
+    
+
   
 
 def change_in_blue(ratio_first_picture, ratio_current):
